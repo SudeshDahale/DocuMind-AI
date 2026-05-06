@@ -2,9 +2,10 @@ from fastapi import APIRouter, UploadFile, File, Form, HTTPException
 from fastapi.responses import JSONResponse
 from services.pdf import extract_text
 from services.chunking import chunk_text
-from services.retrieval import search_multiple, load_chunks
+from services.retrieval import search_multiple
+from services.reranking import rerank
 from services.generation import answer_question
-from services.rag import create_vector_store  # batch-embedding wrapper
+from services.rag import create_vector_store
 import uuid
 import json
 import os
@@ -26,13 +27,14 @@ def load_metadata():
     with open(META_FILE, "r") as f:
         return json.load(f)
 
+
 def save_metadata(meta):
     with open(META_FILE, "w") as f:
         json.dump(meta, f)
 
 
 # -------------------------
-# UPLOAD PDF
+# UPLOAD
 # -------------------------
 ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "pptx", "ppt", "txt", "md"}
 
@@ -49,7 +51,7 @@ async def upload_pdf(file: UploadFile = File(...)):
     doc_id = str(uuid.uuid4())
     file_name = file.filename
 
-    chunks = chunk_text(pages, doc_id, file_name)   # [{text, page, doc_id, fileName}, ...]
+    chunks = chunk_text(pages, doc_id, file_name)
     create_vector_store(chunks, doc_id)
 
     with open(f"{CHUNK_DIR}/{doc_id}.json", "w") as f:
@@ -116,15 +118,21 @@ async def rename_document(doc_id: str, fileName: str = Form(...)):
 
 
 # -------------------------
-# ASK QUESTION — returns JSON with answer + citations
+# ASK QUESTION
 # -------------------------
 @router.post("/ask")
-async def ask_question(doc_ids: str = Form(...), question: str = Form(...), history: str = Form(default="[]")):
+async def ask_question(
+    doc_ids: str = Form(...),
+    question: str = Form(...),
+    history: str = Form(default="[]")
+):
     id_list = [d.strip() for d in doc_ids.split(",") if d.strip()]
     try:
         history_list = json.loads(history)
     except Exception:
         history_list = []
+
     relevant_chunks = search_multiple(id_list, question)
-    result = answer_question(question, relevant_chunks, history=history_list)
+    reranked_chunks = rerank(question, relevant_chunks)
+    result = answer_question(question, reranked_chunks, history=history_list)
     return JSONResponse(content=result)
