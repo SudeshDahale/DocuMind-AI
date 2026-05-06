@@ -7,3 +7,187 @@ User authentication
 Better UI/UX enhancements
 Support for more file types (Word, PPT, etc.)*
 Conversation memory (follow-up questions) 
+
+
+⚙️ Agile Plan (4 Phases, 2 Weeks Each)
+
+We’ll simulate 8-week FAANG-style delivery
+
+🚀 PHASE 1 — Foundation Refactor (Weeks 1–2)
+🎯 Goal:
+
+Make your system clean, modular, extensible
+
+🔹 Sprint 1 Tasks
+🧩 1. Refactor rag.py
+
+Break into:
+
+services/
+  chunking.py
+  embedding.py
+  retrieval.py
+  generation.py
+⚡ 2. Implement Batch Embeddings
+Replace sequential embedding calls
+Add retry logic
+🧠 3. Add Config System
+
+Create:
+
+core/config.py
+.env
+📦 4. Introduce Dependency Injection
+Pass services instead of importing directly
+🧪 5. Basic Unit Tests
+chunking
+embedding
+retrieval
+✅ Sprint 1 Deliverable
+Clean architecture
+Faster embedding
+Testable modules
+🚀 PHASE 2 — Intelligent RAG (Weeks 3–4)
+🎯 Goal:
+
+Make your RAG actually smart (industry level)
+
+🔹 Sprint 2 Tasks
+🔍 1. Hybrid Retrieval
+Add BM25 (rank_bm25)
+Merge with FAISS
+🧠 2. Re-ranking Layer
+CrossEncoder (MiniLM)
+🧠 3. Query Classification
+summary / factual / comparison
+🧾 4. Context Compression
+Limit tokens
+smarter chunk selection
+🔹 Sprint 3 Tasks
+📊 5. Evaluation System
+
+Add:
+
+dataset of questions
+metrics:
+precision
+answer correctness
+
+Use:
+
+RAGAS
+🧪 6. Evaluation CLI
+python evaluate.py
+✅ Phase 2 Deliverable
+Smart retrieval
+Measurable quality
+
+👉 THIS is where your project becomes interview-ready
+
+🚀 PHASE 3 — Production Engineering (Weeks 5–6)
+🎯 Goal:
+
+Make system scalable + reliable
+
+🔹 Sprint 4 Tasks
+⚙️ 1. Async Processing
+Add Celery + Redis
+
+Flow:
+
+Upload → Queue → Worker → Index
+⚡ 2. Caching Layer
+Redis cache:
+embeddings
+responses
+🗄️ 3. Replace Storage
+PostgreSQL → metadata
+Qdrant / Pinecone → vectors
+🔐 4. Authentication
+JWT login
+per-user docs
+🔹 Sprint 5 Tasks
+📊 5. Observability
+structured logging
+latency tracking
+token usage
+🚨 6. Error Handling
+retries
+fallbacks
+✅ Phase 3 Deliverable
+Scalable backend
+multi-user system
+production ready
+🚀 PHASE 4 — Product + UX (Weeks 7–8)
+🎯 Goal:
+
+Make it look like a real SaaS product
+
+🔹 Sprint 6 Tasks
+🎨 1. UI Upgrade
+
+Add:
+
+source highlighting in PDF
+retrieved chunks view
+streaming responses
+📂 2. Workspace System
+multiple documents
+collections
+🧠 3. Multi-doc reasoning
+query across docs
+🔹 Sprint 7 Tasks
+📊 4. Structured Extraction
+
+User selects:
+
+{
+  "invoice_number": "",
+  "total": ""
+}
+🤖 5. AI Agent Mode
+
+Example:
+
+“Summarize → extract → generate report”
+
+📈 6. Analytics Dashboard
+queries
+usage
+cost
+✅ Phase 4 Deliverable
+
+👉 This becomes a startup-level product
+
+⭐ NEW FEATURES (High Impact)
+
+Pick 3–5 of these:
+
+🔥 1. “Explain Document” Mode
+section-wise breakdown
+like a tutor
+🔥 2. Document Comparison
+compare 2 PDFs
+highlight differences
+🔥 3. Auto Report Generator
+convert documents → structured reports
+🔥 4. Plugin System
+user-defined extraction templates
+🔥 5. API for Developers
+POST /query
+POST /extract
+🔥 6. Real-time Collaboration
+shared workspace
+📊 Agile Board (How YOU should manage)
+
+Use:
+
+Jira / Notion / Trello
+
+Columns:
+
+Backlog
+To Do
+In Progress
+Review
+Done
