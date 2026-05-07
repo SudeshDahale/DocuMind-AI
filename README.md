@@ -7,7 +7,6 @@
 ## 🚀 Quick Start
 
 ### Prerequisites
-
 - Node.js (v16+)
 - Python 3.8+
 - OpenAI API Key
@@ -24,14 +23,13 @@ python -m venv venv
 
 # Windows
 venv\Scripts\activate
-
 # Mac/Linux
 source venv/bin/activate
 
 pip install -r requirements.txt
 ```
 
-Create `.env` file inside `backend/`:
+Create `.env` inside `backend/`:
 
 ```env
 OPENAI_API_KEY=your_api_key_here
@@ -47,6 +45,13 @@ MAX_HISTORY_TURNS=10
 
 # Storage
 STORAGE_BASE=storage
+
+# Retrieval & Reranking
+RERANKER_MODEL=cross-encoder/ms-marco-MiniLM-L-6-v2
+BM25_WEIGHT=0.3
+FAISS_WEIGHT=0.7
+MAX_CONTEXT_TOKENS=2000
+RERANK_TOP_N=5
 ```
 
 Start backend server:
@@ -74,6 +79,8 @@ cd backend
 pytest tests/ -v
 ```
 
+27 tests across chunking, embedding, retrieval, reranking, query classification, and context compression.
+
 ---
 
 ## 📁 Project Structure
@@ -81,29 +88,34 @@ pytest tests/ -v
 ```
 DocuMind-AI/
 ├── backend/
-│   ├── main.py                  # FastAPI app entry point
+│   ├── main.py
 │   ├── core/
-│   │   └── config.py            # Centralized config via .env
+│   │   └── config.py               # Centralized config via .env
 │   ├── routes/
-│   │   └── upload.py            # API endpoints
+│   │   └── upload.py               # API endpoints
 │   ├── services/
-│   │   ├── chunking.py          # Page-aware text chunking
-│   │   ├── embedding.py         # Batch embeddings with retry logic
-│   │   ├── retrieval.py         # FAISS vector store + search
-│   │   ├── generation.py        # LLM answer + citations
-│   │   ├── rag.py               # Compatibility shim
-│   │   ├── pdf.py               # Multi-format text extraction
-│   │   └── llm.py               # OpenAI client helpers
+│   │   ├── chunking.py             # Page-aware text chunking
+│   │   ├── embedding.py            # Batch embeddings with retry
+│   │   ├── retrieval.py            # Hybrid BM25 + FAISS search
+│   │   ├── reranking.py            # CrossEncoder reranking
+│   │   ├── query_classifier.py     # Query type detection
+│   │   ├── context.py              # Token budget + compression
+│   │   ├── generation.py           # LLM answer + citations
+│   │   ├── rag.py                  # Compatibility shim
+│   │   ├── pdf.py                  # Multi-format text extraction
+│   │   └── llm.py                  # OpenAI client helpers
 │   ├── tests/
 │   │   ├── test_chunking.py
 │   │   ├── test_embedding.py
-│   │   └── test_retrieval.py
-│   ├── storage/                 # FAISS indexes + chunk JSON
+│   │   ├── test_retrieval.py
+│   │   ├── test_reranking.py
+│   │   ├── test_query_classifier.py
+│   │   └── test_context.py
+│   ├── storage/                    # FAISS indexes + chunk JSON
 │   └── requirements.txt
-
 └── frontend/
     ├── src/
-    │   ├── components/          # React components
+    │   ├── components/
     │   ├── App.jsx
     │   └── index.css
     ├── package.json
@@ -112,46 +124,51 @@ DocuMind-AI/
 
 ---
 
-## 🏗️ System Architecture (RAG Pipeline)
+## 🏗️ System Architecture
 
-This system follows a Retrieval-Augmented Generation (RAG) architecture to ensure responses are grounded in document context and reduce hallucinations.
-
-![Architecture Diagram](./assets/rag-pipeline.svg)
+![RAG Pipeline](./assets/rag-pipeline.svg)
 
 ### Pipeline
 
 1. User uploads a document
-2. Backend extracts text and splits it into page-aware chunks (`chunking.py`)
-3. Chunks are embedded in batches using OpenAI `text-embedding-3-small`
-4. Embeddings are stored in a FAISS index per document (`retrieval.py`)
-5. User question is embedded and top-k chunks are retrieved
-6. Retrieved chunks are passed to GPT-4.1-mini (`generation.py`)
-7. Final answer is returned with citations
+2. Text extracted and split into page-aware chunks (`chunking.py`)
+3. Chunks embedded in batches with retry logic (`embedding.py`)
+4. Embeddings stored in a per-document FAISS index (`retrieval.py`)
+5. On question, query is embedded and retrieved via **hybrid BM25 + FAISS search**
+6. Retrieved chunks are **reranked** by a CrossEncoder model (`reranking.py`)
+7. Query is **classified** (factual / summary / comparison) to select the right prompt (`query_classifier.py`)
+8. Context is **compressed** to fit within token budget (`context.py`)
+9. GPT-4.1-mini generates the answer with inline citations (`generation.py`)
 
 ---
 
 ## ✨ Features
 
-- 📄 Multi-format Upload (PDF, DOCX, PPTX, TXT)
-- 🤖 RAG-based AI Q&A system
+- 📄 Multi-format upload — PDF, DOCX, PPTX, TXT
+- 🤖 RAG-based AI Q&A grounded in your documents
+- 🔍 Hybrid retrieval — BM25 keyword + FAISS semantic search
+- 🧠 CrossEncoder reranking for higher answer quality
+- 🎯 Query classification — tailored prompts per question type
+- 🧾 Context compression — token-efficient chunk selection
 - 📚 Multi-document support
-- 🔖 Source citations (page + snippet)
+- 🔖 Source citations with page number and snippet
 - 💬 Chat history export (Markdown / JSON / TXT)
 - 🧠 Conversation memory (session-based)
-- 🗂️ Document management (list, delete, rename)
-- 🎨 Modern UI with animations
-- 📱 Fully responsive design
-- ⚡ Batch embeddings with retry logic
-- 🧪 Unit-tested core modules
-- ⚙️ Config-driven architecture
+- 🗂️ Document management — list, rename, delete
+- 🎨 Modern UI with Framer Motion animations
+- 📱 Fully responsive
+- ⚡ Batch embeddings with exponential backoff
+- ⚙️ Config-driven via `.env`
 
 ---
 
 ## 🛠️ Tech Stack
 
-**Frontend:** React 18, Vite, Framer Motion, Lucide Icons  
-**Backend:** FastAPI, OpenAI GPT-4.1-mini, FAISS, pypdf, python-docx, python-pptx  
-**Testing:** pytest  
+**Frontend:** React 18, Vite, Framer Motion, Lucide Icons
+
+**Backend:** FastAPI, OpenAI GPT-4.1-mini, FAISS, BM25, sentence-transformers, pypdf, python-docx, python-pptx
+
+**Testing:** pytest
 
 ---
 
@@ -165,6 +182,7 @@ This system follows a Retrieval-Augmented Generation (RAG) architecture to ensur
 | Text | `.txt`, `.md` |
 
 ---
+
 
 ## 📝 License
 
