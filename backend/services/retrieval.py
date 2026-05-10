@@ -5,7 +5,6 @@ import faiss
 from typing import List, Dict, Optional
 from openai import OpenAI
 from rank_bm25 import BM25Okapi
-
 from core.config import config
 from services.embedding import get_embedding
 
@@ -21,11 +20,9 @@ def build_vector_store(
         raise ValueError("chunks and embeddings length mismatch")
 
     os.makedirs(config.index_dir, exist_ok=True)
-
     dim = len(embeddings[0])
     index = faiss.IndexFlatL2(dim)
     index.add(np.array(embeddings, dtype="float32"))
-
     faiss.write_index(index, os.path.join(config.index_dir, f"{doc_id}.index"))
     return index
 
@@ -43,7 +40,6 @@ def load_chunks(doc_id: str) -> Optional[List[Dict]]:
         return None
     with open(path, "r") as f:
         data = json.load(f)
-    # Normalise: some saved chunks are plain strings, ensure all are dicts
     normalised = []
     for i, item in enumerate(data):
         if isinstance(item, str):
@@ -58,13 +54,13 @@ def load_chunks(doc_id: str) -> Optional[List[Dict]]:
     return normalised
 
 
-# ── BM25 ────────────────────────────────────────────────────────
+# ── BM25 ─────────────────────────────────────────────────────────────────────
+
 def _tokenize(text: str) -> List[str]:
     return text.lower().split()
 
 
 def bm25_search(query: str, chunks: List[Dict], k: int) -> List[Dict]:
-    """Keyword-based BM25 retrieval over a chunk list."""
     corpus = [_tokenize(c["text"]) for c in chunks]
     bm25 = BM25Okapi(corpus)
     scores = bm25.get_scores(_tokenize(query))
@@ -72,7 +68,8 @@ def bm25_search(query: str, chunks: List[Dict], k: int) -> List[Dict]:
     return [chunks[i] for i in top_indices if scores[i] > 0]
 
 
-# ── FAISS ────────────────────────────────────────────────────────
+# ── FAISS ─────────────────────────────────────────────────────────────────────
+
 def faiss_search(
     index: faiss.IndexFlatL2,
     query: str,
@@ -80,13 +77,13 @@ def faiss_search(
     k: int,
     client: OpenAI = None,
 ) -> List[Dict]:
-    """Dense vector FAISS retrieval."""
     query_vec = get_embedding(query, client=client)
     _, indices = index.search(np.array([query_vec], dtype="float32"), k)
     return [chunks[i] for i in indices[0] if 0 <= i < len(chunks)]
 
 
-# ── HYBRID ───────────────────────────────────────────────────────
+# ── HYBRID ────────────────────────────────────────────────────────────────────
+
 def search(
     index: faiss.IndexFlatL2,
     query: str,
@@ -94,17 +91,12 @@ def search(
     k: int = None,
     client: OpenAI = None,
 ) -> List[Dict]:
-    """
-    Hybrid retrieval: merge FAISS (dense) + BM25 (sparse) results.
-    Deduplicates by chunk text, preserving weighted order.
-    """
     k = k or config.RETRIEVAL_TOP_K
-    fetch_k = k * 2  # fetch more, deduplicate down to k
+    fetch_k = k * 2
 
     faiss_results = faiss_search(index, query, chunks, fetch_k, client)
     bm25_results = bm25_search(query, chunks, fetch_k)
 
-    # Score each chunk: FAISS rank score + BM25 rank score
     scores: Dict[str, float] = {}
     id_to_chunk: Dict[str, Dict] = {}
 
@@ -128,7 +120,6 @@ def search_multiple(
     k: int = None,
     client: OpenAI = None,
 ) -> List[Dict]:
-    """Hybrid search across multiple documents, merged."""
     k = k or config.RETRIEVAL_TOP_K
     all_chunks: List[Dict] = []
     for doc_id in doc_ids:
