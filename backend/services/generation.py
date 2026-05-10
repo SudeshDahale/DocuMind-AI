@@ -1,6 +1,8 @@
 from typing import List, Dict, Optional
 from openai import OpenAI
-
+import time
+from core.logger import get_logger
+from core.metrics import record
 from core.config import config
 from services.query_classifier import classify_query
 from services.context import compress_context, build_context_string
@@ -81,11 +83,15 @@ def answer_question(
         "content": f"Document context:\n{context}\n\nQuestion: {query}",
     })
 
+    t0 = time.perf_counter()
     response = client.chat.completions.create(
         model=config.CHAT_MODEL,
         messages=messages,
     )
+    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+
     answer = response.choices[0].message.content
+    usage = response.usage  # prompt_tokens, completion_tokens, total_tokens
 
     # 5. Build deduplicated citations
     seen: set = set()
@@ -100,9 +106,39 @@ def answer_question(
                 "snippet": chunk["text"][:200].strip(),
             })
 
+    # Log structured event
+    log = get_logger("generation")
+    log.info(
+        "llm_call",
+        extra={
+            "query_type": query_type,
+            "latency_ms": latency_ms,
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "total_tokens": usage.total_tokens,
+            "context_tokens": token_count,
+            "model": config.CHAT_MODEL,
+        },
+    )
+
+    # Record to in-process metrics
+    record({
+        "query_type": query_type,
+        "latency_ms": latency_ms,
+        "prompt_tokens": usage.prompt_tokens,
+        "completion_tokens": usage.completion_tokens,
+        "model": config.CHAT_MODEL,
+    })
+
     return {
         "answer": answer,
         "citations": citations,
         "query_type": query_type,
         "context_tokens": token_count,
+        "usage": {
+            "prompt_tokens": usage.prompt_tokens,
+            "completion_tokens": usage.completion_tokens,
+            "total_tokens": usage.total_tokens,
+            "latency_ms": latency_ms,
+        },
     }
