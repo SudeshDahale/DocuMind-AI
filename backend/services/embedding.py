@@ -3,14 +3,19 @@ import numpy as np
 from typing import List
 from openai import OpenAI
 from core.config import config
+from core.logger import get_logger
+from core.errors import with_retry
+
+log = get_logger("embedding")
 
 
 def _get_client() -> OpenAI:
     return OpenAI(api_key=config.OPENAI_API_KEY)
 
 
+@with_retry(max_attempts=3, delay=1.0, backoff=2.0, exceptions=(Exception,), reraise=True)
 def get_embedding(text: str, client: OpenAI = None) -> List[float]:
-    """Embed a single string."""
+    """Embed a single string with automatic retry."""
     client = client or _get_client()
     response = client.embeddings.create(
         model=config.EMBEDDING_MODEL,
@@ -28,23 +33,17 @@ def get_embeddings_batch(
 ) -> List[List[float]]:
     """
     Embed a list of texts using batched API calls with retry logic.
-
-    Args:
-        texts: list of strings to embed
-        client: optional pre-built OpenAI client (for DI / testing)
-        batch_size: how many texts per API call (OpenAI max is 2048)
-        max_retries: attempts per batch before raising
-        retry_delay: base seconds to wait between retries (exponential backoff)
-
-    Returns:
-        list of embedding vectors in the same order as `texts`
+    Falls back to zero vectors for any batch that permanently fails
+    so the rest of the document can still be indexed.
     """
     client = client or _get_client()
+    dim = None  # resolved on first success
     all_embeddings: List[List[float]] = []
 
     for start in range(0, len(texts), batch_size):
-        batch = texts[start : start + batch_size]
+        batch = texts[start: start + batch_size]
         last_error = None
+        wait = retry_delay
 
         for attempt in range(max_retries):
             try:
@@ -52,18 +51,40 @@ def get_embeddings_batch(
                     model=config.EMBEDDING_MODEL,
                     input=batch,
                 )
-                # OpenAI returns embeddings in the same order as input
-                batch_embeddings = [item.embedding for item in sorted(response.data, key=lambda x: x.index)]
+                batch_embeddings = [
+                    item.embedding
+                    for item in sorted(response.data, key=lambda x: x.index)
+                ]
+                if dim is None:
+                    dim = len(batch_embeddings[0])
                 all_embeddings.extend(batch_embeddings)
                 break
             except Exception as e:
                 last_error = e
-                wait = retry_delay * (2 ** attempt)
-                time.sleep(wait)
+                log.warning(
+                    "embedding_batch_failed",
+                    extra={
+                        "batch_start": start,
+                        "attempt": attempt + 1,
+                        "error": str(e),
+                        "retry_in": wait,
+                    },
+                )
+                if attempt < max_retries - 1:
+                    time.sleep(wait)
+                    wait *= 2.0
         else:
-            raise RuntimeError(
-                f"Embedding batch {start}–{start+len(batch)} failed after "
-                f"{max_retries} retries: {last_error}"
+            # Fallback: zero vectors so indexing can continue
+            fallback_dim = dim or 1536
+            log.error(
+                "embedding_batch_exhausted_retries_using_zero_vectors",
+                extra={
+                    "batch_start": start,
+                    "batch_size": len(batch),
+                    "fallback_dim": fallback_dim,
+                    "error": str(last_error),
+                },
             )
+            all_embeddings.extend([[0.0] * fallback_dim] * len(batch))
 
     return all_embeddings
