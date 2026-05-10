@@ -10,6 +10,9 @@ import uuid
 import json
 import os
 import time
+from core.logger import get_logger
+
+log = get_logger("upload")
 
 router = APIRouter()
 
@@ -47,12 +50,21 @@ async def upload_pdf(file: UploadFile = File(...)):
             detail=f"Unsupported file type '.{ext}'. Allowed: {', '.join(ALLOWED_EXTENSIONS)}"
         )
 
-    pages = extract_text(file.file, file.filename)
+    t0 = time.perf_counter()
     doc_id = str(uuid.uuid4())
     file_name = file.filename
 
+    pages = extract_text(file.file, file.filename)
     chunks = chunk_text(pages, doc_id, file_name)
     create_vector_store(chunks, doc_id)
+    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    log.info("document_uploaded", extra={
+        "doc_id": doc_id,
+        "file_name": file_name,
+        "num_chunks": len(chunks),
+        "latency_ms": latency_ms,
+    })
 
     with open(f"{CHUNK_DIR}/{doc_id}.json", "w") as f:
         json.dump(chunks, f)
@@ -132,7 +144,20 @@ async def ask_question(
     except Exception:
         history_list = []
 
+    t0 = time.perf_counter()
     relevant_chunks = search_multiple(id_list, question)
     reranked_chunks = rerank(question, relevant_chunks)
     result = answer_question(question, reranked_chunks, history=history_list)
+    total_ms = round((time.perf_counter() - t0) * 1000, 1)
+
+    log.info("ask_request", extra={
+        "doc_ids": id_list,
+        "query_type": result.get("query_type"),
+        "chunks_retrieved": len(relevant_chunks),
+        "chunks_reranked": len(reranked_chunks),
+        "total_latency_ms": total_ms,
+        "prompt_tokens": result.get("usage", {}).get("prompt_tokens"),
+        "completion_tokens": result.get("usage", {}).get("completion_tokens"),
+    })
+
     return JSONResponse(content=result)
