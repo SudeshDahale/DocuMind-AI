@@ -88,21 +88,6 @@ Measurable quality
 🎯 Goal:
 
 Make system scalable + reliable
-
-🔹 Sprint 4 Tasks
-⚙️ 1. Async Processing
-Add Celery + Redis
-
-Flow:
-
-Upload → Queue → Worker → Index
-⚡ 2. Caching Layer
-Redis cache:
-embeddings
-responses
-🗄️ 3. Replace Storage
-PostgreSQL → metadata
-Qdrant / Pinecone → vectors
 🔐 4. Authentication
 JWT login
 per-user docs
