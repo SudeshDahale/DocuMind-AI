@@ -90,7 +90,9 @@ DocuMind-AI/
 ├── backend/
 │   ├── main.py
 │   ├── core/
-│   │   └── config.py               # Centralized config via .env
+│   │   ├── config.py               # Centralized config via .env
+│   │   ├── logger.py               # Structured JSON logger
+│   │   └── metrics.py              # In-process latency & token metrics
 │   ├── routes/
 │   │   └── upload.py               # API endpoints
 │   ├── services/
@@ -139,6 +141,7 @@ DocuMind-AI/
 7. Query is **classified** (factual / summary / comparison) to select the right prompt (`query_classifier.py`)
 8. Context is **compressed** to fit within token budget (`context.py`)
 9. GPT-4.1-mini generates the answer with inline citations (`generation.py`)
+10. Latency and token usage are **logged and tracked** per request (`logger.py`, `metrics.py`)
 
 ---
 
@@ -155,10 +158,44 @@ DocuMind-AI/
 - 💬 Chat history export (Markdown / JSON / TXT)
 - 🧠 Conversation memory (session-based)
 - 🗂️ Document management — list, rename, delete
+- 📊 Observability — structured JSON logs, latency tracking, token usage per request
 - 🎨 Modern UI with Framer Motion animations
 - 📱 Fully responsive
 - ⚡ Batch embeddings with exponential backoff
 - ⚙️ Config-driven via `.env`
+
+---
+
+## 📊 Observability
+
+Every request is logged as a structured JSON line to stdout:
+
+```json
+{"ts":"2026-05-10T10:22:01Z","level":"INFO","logger":"upload","msg":"ask_request","query_type":"factual","total_latency_ms":1423.5,"prompt_tokens":812,"completion_tokens":190}
+```
+
+A live metrics summary is available at:
+
+```
+GET http://localhost:8000/metrics
+```
+
+Example response:
+
+```json
+{
+  "total_requests": 12,
+  "latency_ms": { "avg": 1312.4, "min": 980.1, "max": 1823.6 },
+  "tokens": {
+    "prompt_total": 9744,
+    "completion_total": 2280,
+    "prompt_avg": 812.0,
+    "completion_avg": 190.0
+  }
+}
+```
+
+Token usage and latency are also displayed inline in the chat UI beneath each answer.
 
 ---
 
@@ -182,7 +219,6 @@ DocuMind-AI/
 | Text | `.txt`, `.md` |
 
 ---
-
 
 ## 📝 License
 
