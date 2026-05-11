@@ -1,83 +1,134 @@
 import { useState } from 'react'
-import { motion, AnimatePresence } from 'framer-motion'
-import Hero from './components/Hero'
-import Upload from './components/Upload'
-import Chat from './components/Chat'
+import { AnimatePresence, motion } from 'framer-motion'
+import Sidebar from './components/Sidebar'
+import ChatPanel from './components/ChatPanel'
+import SourcesPanel from './components/SourcesPanel'
+import LandingPage from './components/LandingPage'
 import Background from './components/Background'
 import './App.css'
 
 function App() {
-  const [docs, setDocs] = useState([])
-  const [chatStarted, setChatStarted] = useState(false)
+  const [workspaces, setWorkspaces] = useState([])         // [{id, name, docs:[]}]
+  const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
+  const [appStarted, setAppStarted] = useState(false)
+  const [activeSources, setActiveSources] = useState([])   // chunks from last answer
+  const [highlightText, setHighlightText] = useState('')
 
-  const handleUploadSuccess = (id, name) => {
-    setDocs(prev => [...prev, { docId: id, fileName: name }])
+  const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || null
+
+  // ── Workspace actions ───────────────────────────────────────────────────
+  const createWorkspace = (name) => {
+    const id = crypto.randomUUID()
+    setWorkspaces(prev => [...prev, { id, name, docs: [] }])
+    setActiveWorkspaceId(id)
+    setAppStarted(true)
   }
 
-  const handleStartChat = () => {
-    if (docs.length > 0) setChatStarted(true)
+  const deleteWorkspace = async (wsId) => {
+    const ws = workspaces.find(w => w.id === wsId)
+    if (ws) {
+      for (const doc of ws.docs) {
+        await fetch(`http://localhost:8000/documents/${doc.docId}`, { method: 'DELETE' }).catch(() => {})
+      }
+    }
+    setWorkspaces(prev => prev.filter(w => w.id !== wsId))
+    if (activeWorkspaceId === wsId) {
+      const remaining = workspaces.filter(w => w.id !== wsId)
+      setActiveWorkspaceId(remaining[0]?.id || null)
+      if (remaining.length === 0) setAppStarted(false)
+    }
   }
 
-  const handleReset = () => {
-    setDocs([])
-    setChatStarted(false)
+  const renameWorkspace = (wsId, name) => {
+    setWorkspaces(prev => prev.map(w => w.id === wsId ? { ...w, name } : w))
   }
 
-  // Delete a doc from state and call backend
-  const handleDelete = async (docId) => {
-    await fetch(`http://localhost:8000/documents/${docId}`, { method: 'DELETE' })
-    setDocs(prev => prev.filter(d => d.docId !== docId))
+  // ── Doc actions ─────────────────────────────────────────────────────────
+  const addDoc = (wsId, doc) => {
+    setWorkspaces(prev => prev.map(w =>
+      w.id === wsId ? { ...w, docs: [...w.docs, doc] } : w
+    ))
   }
 
-  // Rename a doc in state and call backend
-  const handleRename = async (docId, newName) => {
-    const formData = new FormData()
-    formData.append('fileName', newName)
-    await fetch(`http://localhost:8000/documents/${docId}/rename`, {
-      method: 'PATCH',
-      body: formData,
-    })
-    setDocs(prev => prev.map(d => d.docId === docId ? { ...d, fileName: newName } : d))
+  const removeDoc = async (wsId, docId) => {
+    await fetch(`http://localhost:8000/documents/${docId}`, { method: 'DELETE' }).catch(() => {})
+    setWorkspaces(prev => prev.map(w =>
+      w.id === wsId ? { ...w, docs: w.docs.filter(d => d.docId !== docId) } : w
+    ))
+  }
+
+  const renameDoc = async (wsId, docId, newName) => {
+    const fd = new FormData(); fd.append('fileName', newName)
+    await fetch(`http://localhost:8000/documents/${docId}/rename`, { method: 'PATCH', body: fd }).catch(() => {})
+    setWorkspaces(prev => prev.map(w =>
+      w.id === wsId
+        ? { ...w, docs: w.docs.map(d => d.docId === docId ? { ...d, fileName: newName } : d) }
+        : w
+    ))
+  }
+
+  // ── Sources callback ────────────────────────────────────────────────────
+  const handleAnswer = (citations) => {
+    setActiveSources(citations || [])
+    setHighlightText('')
+  }
+
+  if (!appStarted) {
+    return (
+      <>
+        <Background />
+        <LandingPage onCreateWorkspace={createWorkspace} />
+      </>
+    )
   }
 
   return (
-    <div className="app">
+    <div className="app-shell">
       <Background />
-
-      <AnimatePresence mode="wait">
-        {!chatStarted ? (
-          <motion.div
-            key="upload-view"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Hero />
-            <Upload
-              onUploadSuccess={handleUploadSuccess}
-              uploadedDocs={docs}
-              onStartChat={handleStartChat}
-              onDelete={handleDelete}
-              onRename={handleRename}
-            />
-          </motion.div>
-        ) : (
-          <motion.div
-            key="chat-view"
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            transition={{ duration: 0.5 }}
-          >
-            <Chat
-              docIds={docs.map(d => d.docId).join(',')}
-              fileNames={docs.map(d => d.fileName)}
-              onReset={handleReset}
-            />
-          </motion.div>
-        )}
-      </AnimatePresence>
+      <Sidebar
+        workspaces={workspaces}
+        activeWorkspaceId={activeWorkspaceId}
+        onSelectWorkspace={setActiveWorkspaceId}
+        onCreateWorkspace={createWorkspace}
+        onDeleteWorkspace={deleteWorkspace}
+        onRenameWorkspace={renameWorkspace}
+        onAddDoc={addDoc}
+        onRemoveDoc={removeDoc}
+        onRenameDoc={renameDoc}
+      />
+      <main className="app-main">
+        <AnimatePresence mode="wait">
+          {activeWorkspace ? (
+            <motion.div
+              key={activeWorkspace.id}
+              className="workspace-view"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+            >
+              <ChatPanel
+                workspace={activeWorkspace}
+                onAnswer={handleAnswer}
+                onHighlight={setHighlightText}
+              />
+              <SourcesPanel
+                sources={activeSources}
+                highlightText={highlightText}
+                onHighlight={setHighlightText}
+              />
+            </motion.div>
+          ) : (
+            <motion.div
+              key="empty"
+              className="empty-workspace"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+            >
+              <p>Select or create a workspace</p>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </main>
     </div>
   )
 }

@@ -1,5 +1,29 @@
-.app {
-  min-height: 100vh;
-  position: relative;
+.app-shell {
+  display: flex;
+  height: 100vh;
   overflow: hidden;
+  position: relative;
+}
+
+.app-main {
+  flex: 1;
+  display: flex;
+  overflow: hidden;
+  position: relative;
+  z-index: 1;
+}
+
+.workspace-view {
+  display: flex;
+  flex: 1;
+  overflow: hidden;
+}
+
+.empty-workspace {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--text-muted);
+  font-size: 15px;
 }
