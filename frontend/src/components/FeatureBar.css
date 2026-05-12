@@ -1,0 +1,42 @@
+/* frontend/src/components/FeatureBar.css */
+.feature-bar {
+  display: flex;
+  gap: 4px;
+  padding: 8px 16px;
+  border-bottom: 1px solid var(--border-color);
+  background: rgba(17, 17, 24, 0.6);
+  flex-shrink: 0;
+}
+
+.feature-tab {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border-radius: var(--radius-sm);
+  border: 1px solid transparent;
+  background: transparent;
+  color: var(--text-muted);
+  font-size: 12px;
+  font-family: inherit;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.15s ease;
+  letter-spacing: 0.02em;
+}
+
+.feature-tab:hover:not(:disabled) {
+  background: rgba(255, 255, 255, 0.05);
+  color: var(--text-secondary);
+}
+
+.feature-tab.active {
+  background: rgba(0, 255, 163, 0.08);
+  border-color: var(--border-accent);
+  color: var(--accent-primary);
+}
+
+.feature-tab:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+}
