@@ -36,7 +36,7 @@ OPENAI_API_KEY=your_api_key_here
 
 # Models
 EMBEDDING_MODEL=text-embedding-3-small
-CHAT_MODEL=gpt-4.1-mini
+CHAT_MODEL=gpt-4o-mini
 
 # RAG settings
 CHUNK_SIZE=500
@@ -70,6 +70,8 @@ npm install
 npm run dev
 ```
 
+The frontend will be available at `http://localhost:3000`
+
 ---
 
 ## 🧪 Running Tests
@@ -84,7 +86,6 @@ pytest tests/ -v
 ---
 
 ## 📁 Project Structure
-
 ```
 DocuMind-AI/
 ├── backend/
@@ -117,19 +118,23 @@ DocuMind-AI/
 │   ├── storage/                    # FAISS indexes + chunk JSON
 │   └── requirements.txt
 └── frontend/
-    ├── src/
-    │   ├── components/
-    │   │   ├── LandingPage.jsx     # Workspace creation landing
-    │   │   ├── Sidebar.jsx         # Workspace + document manager
-    │   │   ├── ChatPanel.jsx       # Streaming chat interface
-    │   │   ├── SourcesPanel.jsx    # Retrieved chunk viewer with highlighting
-    │   │   └── Background.jsx      # Animated background
-    │   ├── App.jsx
-    │   └── index.css
-    ├── package.json
-    └── vite.config.js
+├── src/
+│   ├── components/
+│   │   ├── LandingPage.jsx     # Workspace creation landing
+│   │   ├── Sidebar.jsx         # Workspace + document manager
+│   │   ├── ChatPanel.jsx       # Streaming chat interface
+│   │   ├── SourcesPanel.jsx    # Retrieved chunk viewer with highlighting
+│   │   ├── ComparePanel.jsx    # Document comparison interface
+│   │   ├── ExplainPanel.jsx    # Detailed explanations panel
+│   │   ├── ReportPanel.jsx     # Report generation panel
+│   │   ├── FeatureBar.jsx      # Feature selection toolbar
+│   │   └── Background.jsx      # Animated background effects
+│   ├── App.jsx
+│   ├── main.jsx
+│   └── index.css
+├── package.json
+└── vite.config.js
 ```
-
 ---
 
 ## 🏗️ System Architecture
@@ -146,7 +151,7 @@ DocuMind-AI/
 6. Retrieved chunks are **reranked** by a CrossEncoder model — falls back gracefully if model unavailable (`reranking.py`)
 7. Query is **classified** (factual / summary / comparison) with retry and fallback to `factual` (`query_classifier.py`)
 8. Context is **compressed** to fit within token budget (`context.py`)
-9. GPT-4.1-mini generates the answer with inline citations — retries up to 3× with a user-friendly fallback message (`generation.py`)
+9. GPT-4o-mini generates the answer with inline citations — retries up to 3× with a user-friendly fallback message (`generation.py`)
 10. Latency and token usage are **logged and tracked** per request (`logger.py`, `metrics.py`)
 11. Answer streams progressively to the UI; retrieved source chunks appear in the **Sources panel** with text highlighting
 
@@ -154,26 +159,57 @@ DocuMind-AI/
 
 ## ✨ Features
 
-- 📄 Multi-format upload — PDF, DOCX, PPTX, TXT
-- 🤖 RAG-based AI Q&A grounded in your documents
-- 🔍 Hybrid retrieval — BM25 keyword + FAISS semantic search
-- 🧠 CrossEncoder reranking for higher answer quality
-- 🎯 Query classification — tailored prompts per question type
-- 🧾 Context compression — token-efficient chunk selection
-- 📂 **Workspace system** — organise documents into named collections
+### Core RAG Features
+- 📄 **Multi-format upload** — PDF, DOCX, PPTX, TXT
+- 🤖 **RAG-based AI Q&A** — answers grounded in your documents
+- 🔍 **Hybrid retrieval** — BM25 keyword + FAISS semantic search
+- 🧠 **CrossEncoder reranking** — higher answer quality with reranking
+- 🎯 **Query classification** — tailored prompts per question type
+- 🧾 **Context compression** — token-efficient chunk selection
+- 🔖 **Source citations** — with page numbers and snippets
+
+### Workspace & Document Management
+- 📂 **Workspace system** — organize documents into named collections
 - 🧠 **Multi-doc reasoning** — query across all documents in a workspace simultaneously
-- ⚡ **Streaming responses** — answers reveal progressively with a blinking cursor
-- 🔎 **Source highlighting** — click any citation to highlight matching text in the Sources panel
-- 🔖 Source citations with page number and snippet
-- 💬 Chat history export (TXT)
-- 🧠 Conversation memory (session-based)
-- 🗂️ Document management — add and remove docs per workspace
-- 🚨 **Error handling** — retries with exponential backoff, graceful fallbacks at every layer
-- 📊 Observability — structured JSON logs, latency tracking, token usage per request
-- 🎨 SaaS-grade UI — 3-panel layout with sidebar, chat, and sources
-- ⚙️ Config-driven via `.env`
+- 🗂️ **Document management** — add, remove, and rename documents per workspace
+- 📝 **Workspace renaming** — update workspace names on the fly
+- 🗑️ **Workspace deletion** — remove workspaces and associated documents
+
+### Advanced UI Features
+- ⚡ **Streaming responses** — answers reveal progressively with typing effect
+- 🔎 **Source highlighting** — click citations to highlight matching text in Sources panel
+- 🎨 **Modern SaaS UI** — 3-panel layout with animated background effects
+- 🌈 **Gradient design system** — polished interface with accent colors and smooth animations
+- 📱 **Responsive design** — works across desktop and mobile devices
+
+### AI-Powered Features
+- 💬 **Chat history** — maintains conversation context per workspace
+- 📊 **Document comparison** — compare content across multiple documents (UI ready)
+- 🔍 **Detailed explanations** — get in-depth explanations (UI ready)
+- 📄 **Report generation** — create comprehensive reports (UI ready)
+
+### Developer Experience
+- 🚨 **Robust error handling** — retries with exponential backoff, graceful fallbacks
+- 📊 **Observability** — structured JSON logs, latency tracking, token usage
+- 🧪 **Comprehensive testing** — 27 tests covering all core functionality
+- ⚙️ **Config-driven** — centralized configuration via `.env`
+- 🔄 **Real-time metrics** — `/metrics` endpoint for monitoring
 
 ---
+
+## 🎨 UI Components
+
+### Landing Page
+- Gradient animated title with "DocuMind" branding
+- Feature badges showcasing key capabilities
+- Workspace creation form with smooth animations
+- Animated background with gradient orbs and grid overlay
+
+### Main Application
+- **Sidebar**: Workspace switcher, document uploader, file manager
+- **Chat Panel**: Streaming AI responses with source citations
+- **Sources Panel**: Retrieved chunks with click-to-highlight functionality
+- **Feature Bar**: Quick access to Compare, Explain, and Report features (expandable)
 
 ---
 
@@ -198,14 +234,11 @@ Failures are handled at every layer rather than crashing the request:
 Every request is logged as a structured JSON line to stdout:
 
 ```json
-{"ts":"2026-05-10T10:22:01Z","level":"INFO","logger":"upload","msg":"ask_request","query_type":"factual","total_latency_ms":1423.5,"prompt_tokens":812,"completion_tokens":190}
+{"ts":"2026-05-12T10:22:01Z","level":"INFO","logger":"upload","msg":"ask_request","query_type":"factual","total_latency_ms":1423.5,"prompt_tokens":812,"completion_tokens":190}
 ```
 
 A live metrics summary is available at:
-
-```
 GET http://localhost:8000/metrics
-```
 
 Example response:
 
@@ -228,11 +261,23 @@ Token usage and latency are also displayed inline in the chat UI beneath each an
 
 ## 🛠️ Tech Stack
 
-**Frontend:** React 18, Vite, Framer Motion, Lucide Icons
+**Frontend:** 
+- React 18
+- Vite
+- Framer Motion (animations)
+- Lucide Icons
+- Custom CSS with CSS variables
 
-**Backend:** FastAPI, OpenAI GPT-4.1-mini, FAISS, BM25, sentence-transformers, pypdf, python-docx, python-pptx
+**Backend:** 
+- FastAPI
+- OpenAI GPT-4o-mini
+- FAISS (vector search)
+- BM25 (keyword search)
+- sentence-transformers (reranking)
+- pypdf, python-docx, python-pptx (document parsing)
 
-**Testing:** pytest
+**Testing:** 
+- pytest
 
 ---
 
@@ -246,7 +291,16 @@ Token usage and latency are also displayed inline in the chat UI beneath each an
 | Text | `.txt`, `.md` |
 
 ---
+---
 
 ## 📝 License
 
 MIT License — free to use and modify.
+
+---
+
+## 🤝 Contributing
+
+Contributions are welcome! Please feel free to submit a Pull Request.
+
+---
