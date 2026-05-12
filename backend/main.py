@@ -3,6 +3,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import JSONResponse
 
 from routes.upload import router
+from routes.features import router as features_router
 from core.logger import get_logger
 from core.metrics import snapshot
 
@@ -19,6 +20,7 @@ app.add_middleware(
 )
 
 app.include_router(router)
+app.include_router(features_router)
 
 
 @app.get("/metrics")
