@@ -141,7 +141,6 @@ async def ask_question(
 ):
     id_list = [d.strip() for d in doc_ids.split(",") if d.strip()]
 
-    # Verify all docs belong to this user
     for doc_id in id_list:
         result = await db.execute(
             select(Document).where(Document.doc_id == doc_id, Document.user_id == current_user.id)
@@ -149,12 +148,22 @@ async def ask_question(
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=403, detail=f"Access denied to document {doc_id}")
 
+    # Check token limit before calling LLM
+    key_result = await db.execute(select(APIKey).where(APIKey.user_id == current_user.id))
+    key_row = key_result.scalar_one_or_none()
+    if not key_row:
+        raise HTTPException(status_code=400, detail="No OpenAI API key found.")
+    if key_row.token_limit > 0 and key_row.tokens_used >= key_row.token_limit:
+        raise HTTPException(
+            status_code=429,
+            detail=f"Token limit reached ({key_row.token_limit:,} tokens). Update your limit in Profile & Settings."
+        )
+
     try:
         history_list = json.loads(history)
     except Exception:
         history_list = []
 
-    # Get user's own OpenAI key
     openai_key = await get_user_openai_key(current_user.id, db)
 
     t0 = time.perf_counter()
@@ -167,19 +176,14 @@ async def ask_question(
         raise HTTPException(status_code=500, detail="Failed to answer question.")
 
     # Track usage
-    key_result = await db.execute(select(APIKey).where(APIKey.user_id == current_user.id))
-    key_row = key_result.scalar_one_or_none()
-    if key_row:
-        key_row.total_calls += 1
+    tokens_this_call = result.get("usage", {}).get("total_tokens", 0)
+    key_row.total_calls += 1
+    key_row.tokens_used += tokens_this_call
 
-    # Save to history
     db.add(QueryHistory(
-        id=str(uuid.uuid4()),
-        user_id=current_user.id,
-        doc_ids=json.dumps(id_list),
-        question=question,
-        answer=result.get("answer", ""),
-        created_at=time.time(),
+        id=str(uuid.uuid4()), user_id=current_user.id,
+        doc_ids=json.dumps(id_list), question=question,
+        answer=result.get("answer", ""), created_at=time.time(),
     ))
     await db.commit()
 
