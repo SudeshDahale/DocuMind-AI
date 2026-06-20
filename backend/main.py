@@ -7,13 +7,16 @@ from routes.auth import router as auth_router
 from core.logger import get_logger
 from core.metrics import snapshot
 from db import init_db
+import os
 
 log = get_logger("app")
 app = FastAPI(title="DocuMind API")
 
+FRONTEND_URL = os.getenv("FRONTEND_URL", "http://localhost:5173")
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=[FRONTEND_URL, "http://localhost:5173", "http://localhost:5174"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],

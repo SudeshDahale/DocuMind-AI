@@ -6,6 +6,8 @@ import {
 } from 'lucide-react'
 import './Sidebar.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 export default function Sidebar({
   workspaces, activeWorkspaceId,
   onSelectWorkspace, onCreateWorkspace,
@@ -35,7 +37,7 @@ export default function Sidebar({
     const fd = new FormData(); fd.append('file', file)
     const token = localStorage.getItem('token')
     try {
-      const res = await fetch('http://localhost:8000/upload', {
+      const res = await fetch(`${API}/upload`, {
         method: 'POST', body: fd,
         headers: { Authorization: `Bearer ${token}` }
       })

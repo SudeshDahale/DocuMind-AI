@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { BookOpen, ChevronDown, ChevronUp, Sparkles, Loader2, AlertCircle, Star } from 'lucide-react'
 import './ExplainPanel.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 const DIFFICULTY_COLORS = {
   Beginner:     { bg: 'rgba(0,255,163,0.1)',  border: 'rgba(0,255,163,0.3)',  text: '#00ffa3' },
   Intermediate: { bg: 'rgba(0,212,255,0.1)',  border: 'rgba(0,212,255,0.3)',  text: '#00d4ff' },
@@ -81,7 +83,12 @@ export default function ExplainPanel({ workspace }) {
     try {
       const fd = new FormData()
       fd.append('doc_ids', docIds)
-      const res = await fetch('http://localhost:8000/explain', { method: 'POST', body: fd })
+      const token = localStorage.getItem('token')
+      const res = await fetch(`${API}/explain`, {
+        method: 'POST',
+        body: fd,
+        headers: { Authorization: `Bearer ${token}` },
+      })
       if (!res.ok) throw new Error('Failed to explain document')
       setResult(await res.json())
     } catch (e) {

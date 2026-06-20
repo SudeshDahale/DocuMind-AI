@@ -9,7 +9,7 @@ import AuthModal from './components/AuthModal'
 import ProfilePanel from './components/ProfilePanel'
 import './App.css'
 
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
 function App() {
   const [workspaces, setWorkspaces]         = useState([])

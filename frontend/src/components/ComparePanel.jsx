@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { GitCompare, Loader2, AlertCircle, CheckCircle2, XCircle, MinusCircle, Sparkles } from 'lucide-react'
 import './ComparePanel.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 function SimilarityMeter({ score }) {
   const color = score > 70 ? '#00ffa3' : score > 40 ? '#00d4ff' : '#8b5cf6'
   return (
@@ -43,23 +45,28 @@ export default function ComparePanel({ workspace }) {
   const canCompare = docA && docB && docA !== docB
 
   const handleCompare = async () => {
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    try {
-      const fd = new FormData()
-      fd.append('doc_id_a', docA)
-      fd.append('doc_id_b', docB)
-      if (focus.trim()) fd.append('focus', focus.trim())
-      const res = await fetch('http://localhost:8000/compare', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Comparison failed')
-      setResult(await res.json())
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+  setLoading(true)
+  setError(null)
+  setResult(null)
+  try {
+    const fd = new FormData()
+    fd.append('doc_id_a', docA)
+    fd.append('doc_id_b', docB)
+    if (focus.trim()) fd.append('focus', focus.trim())
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${API}/compare`, {
+      method: 'POST',
+      body: fd,
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Comparison failed')
+    setResult(await res.json())
+  } catch (e) {
+    setError(e.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   if (docs.length < 2) {
     return (

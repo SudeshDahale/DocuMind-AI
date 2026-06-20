@@ -12,6 +12,8 @@ import ComparePanel from './ComparePanel'
 import ReportPanel  from './ReportPanel'
 import './ChatPanel.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 function UsageBar({ usage, queryType }) {
   if (!usage) return null
   return (
@@ -123,7 +125,7 @@ export default function ChatPanel({ workspace, onAnswer, onHighlight, authToken 
         messages.map(m => ({ role: m.role, content: m.content }))
       ))
 
-      const res = await fetch('http://localhost:8000/ask', {
+      const res = await fetch(`${API}/ask`, {
         method: 'POST',
         body: fd,
         headers: { Authorization: `Bearer ${token}` },

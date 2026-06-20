@@ -3,6 +3,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import './AuthModal.css'
 import { Sparkles, Mail, Lock, ArrowRight, Loader2, AlertCircle, Eye, EyeOff, Brain, FolderOpen, Zap } from 'lucide-react'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 export default function AuthModal({ onAuth }) {
   const [mode, setMode] = useState('login')
   const [email, setEmail] = useState('')
@@ -16,7 +18,7 @@ export default function AuthModal({ onAuth }) {
     if (!email.trim() || !password.trim()) { setError('Please fill in all fields'); return }
     setError(''); setLoading(true)
     try {
-      const res = await fetch(`http://localhost:8000/auth/${mode}`, {
+      const res = await fetch(`${API}/auth/${mode}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email: email.trim(), password }),

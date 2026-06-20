@@ -7,25 +7,38 @@ from services.chunking import chunk_text
 from services.retrieval import search_multiple
 from services.reranking import rerank
 from services.generation import answer_question
-from services.rag import create_vector_store
-from db import get_db, Document, QueryHistory, APIKey
+from services.rag import create_vector_store, index_to_bytes, bytes_to_index
+from db import get_db, Document, QueryHistory, APIKey, DocStore
 from core.security import get_current_user, get_user_openai_key
-import uuid
-import json
-import os
-import time
+from core.config import config
+import uuid, json, os, time, base64
 from core.logger import get_logger
 
 log = get_logger("upload")
 router = APIRouter()
 
-CHUNK_DIR = "storage/chunks"
-INDEX_DIR = "storage/indexes"
-
+CHUNK_DIR = config.chunk_dir
+INDEX_DIR = config.index_dir
 os.makedirs(CHUNK_DIR, exist_ok=True)
 os.makedirs(INDEX_DIR, exist_ok=True)
 
 ALLOWED_EXTENSIONS = {"pdf", "docx", "doc", "pptx", "ppt", "txt", "md"}
+
+
+async def ensure_doc_on_disk(doc_id: str, db: AsyncSession) -> bool:
+    """Restore chunks + index from DB if missing from disk (e.g. after redeploy)."""
+    chunk_path = os.path.join(CHUNK_DIR, f"{doc_id}.json")
+    index_path = os.path.join(INDEX_DIR, f"{doc_id}.index")
+    if os.path.exists(chunk_path) and os.path.exists(index_path):
+        return True
+    result = await db.execute(select(DocStore).where(DocStore.doc_id == doc_id))
+    store = result.scalar_one_or_none()
+    if not store:
+        return False
+    with open(chunk_path, "w") as f:
+        f.write(store.chunks_json)
+    bytes_to_index(base64.b64decode(store.index_bytes), doc_id)
+    return True
 
 
 @router.post("/upload")
@@ -56,20 +69,29 @@ async def upload_pdf(
         log.error("upload_failed", extra={"doc_id": doc_id, "error": str(e)})
         raise HTTPException(status_code=500, detail="Failed to process document.")
 
-    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-    log.info("document_uploaded", extra={"doc_id": doc_id, "file_name": file_name, "latency_ms": latency_ms})
-
-    with open(f"{CHUNK_DIR}/{doc_id}.json", "w") as f:
+    chunk_path = os.path.join(CHUNK_DIR, f"{doc_id}.json")
+    with open(chunk_path, "w") as f:
         json.dump(chunks, f)
 
+    encoded_index = base64.b64encode(index_to_bytes(doc_id)).decode("utf-8")
+
+    db.add(DocStore(
+        doc_id=doc_id,
+        chunks_json=json.dumps(chunks),
+        index_bytes=encoded_index,
+        created_at=time.time(),
+    ))
     db.add(Document(
         doc_id=doc_id,
         user_id=current_user.id,
+        workspace_id=None,
         file_name=file_name,
         uploaded_at=time.time(),
     ))
     await db.commit()
 
+    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
+    log.info("document_uploaded", extra={"doc_id": doc_id, "file_name": file_name, "latency_ms": latency_ms})
     return {"message": "Uploaded successfully", "doc_id": doc_id}
 
 
@@ -80,15 +102,10 @@ async def list_documents(
 ):
     result = await db.execute(select(Document).where(Document.user_id == current_user.id))
     docs = result.scalars().all()
-    documents = []
-    for doc in docs:
-        if os.path.exists(f"{CHUNK_DIR}/{doc.doc_id}.json"):
-            documents.append({
-                "doc_id": doc.doc_id,
-                "fileName": doc.file_name,
-                "uploadedAt": doc.uploaded_at,
-            })
-    return {"documents": documents}
+    return {"documents": [
+        {"doc_id": d.doc_id, "fileName": d.file_name, "uploadedAt": d.uploaded_at}
+        for d in docs
+    ]}
 
 
 @router.delete("/documents/{doc_id}")
@@ -104,7 +121,13 @@ async def delete_document(
     if not doc:
         raise HTTPException(status_code=404, detail="Document not found")
 
-    for path in [f"{CHUNK_DIR}/{doc_id}.json", f"{INDEX_DIR}/{doc_id}.index"]:
+    store_result = await db.execute(select(DocStore).where(DocStore.doc_id == doc_id))
+    store = store_result.scalar_one_or_none()
+    if store:
+        await db.delete(store)
+
+    for path in [os.path.join(CHUNK_DIR, f"{doc_id}.json"),
+                 os.path.join(INDEX_DIR, f"{doc_id}.index")]:
         if os.path.exists(path):
             os.remove(path)
 
@@ -148,7 +171,6 @@ async def ask_question(
         if not result.scalar_one_or_none():
             raise HTTPException(status_code=403, detail=f"Access denied to document {doc_id}")
 
-    # Check token limit before calling LLM
     key_result = await db.execute(select(APIKey).where(APIKey.user_id == current_user.id))
     key_row = key_result.scalar_one_or_none()
     if not key_row:
@@ -156,8 +178,12 @@ async def ask_question(
     if key_row.token_limit > 0 and key_row.tokens_used >= key_row.token_limit:
         raise HTTPException(
             status_code=429,
-            detail=f"Token limit reached ({key_row.token_limit:,} tokens). Update your limit in Profile & Settings."
+            detail=f"Token limit reached ({key_row.token_limit:,}). Update your limit in Profile & Settings."
         )
+
+    for doc_id in id_list:
+        if not await ensure_doc_on_disk(doc_id, db):
+            raise HTTPException(status_code=404, detail=f"Document data missing for {doc_id}.")
 
     try:
         history_list = json.loads(history)
@@ -175,7 +201,6 @@ async def ask_question(
         log.error("ask_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Failed to answer question.")
 
-    # Track usage
     tokens_this_call = result.get("usage", {}).get("total_tokens", 0)
     key_row.total_calls += 1
     key_row.tokens_used += tokens_this_call
@@ -187,6 +212,5 @@ async def ask_question(
     ))
     await db.commit()
 
-    total_ms = round((time.perf_counter() - t0) * 1000, 1)
-    log.info("ask_request", extra={"total_latency_ms": total_ms})
+    log.info("ask_request", extra={"total_latency_ms": round((time.perf_counter() - t0) * 1000, 1)})
     return JSONResponse(content=result)

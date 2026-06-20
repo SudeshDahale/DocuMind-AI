@@ -45,6 +45,12 @@ class Document(Base):
     file_name   = Column(String, nullable=False)
     uploaded_at = Column(Float, nullable=False)
 
+class DocStore(Base):
+    __tablename__ = "doc_store"
+    doc_id       = Column(String, primary_key=True)
+    chunks_json  = Column(Text, nullable=False)
+    index_bytes  = Column(Text, nullable=False)
+    created_at   = Column(Float, nullable=False)
 
 class QueryHistory(Base):
     __tablename__ = "query_history"

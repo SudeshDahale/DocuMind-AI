@@ -4,6 +4,8 @@ import { motion, AnimatePresence } from 'framer-motion'
 import { FileBarChart2, Loader2, AlertCircle, Sparkles, Download, ChevronDown, ChevronUp, CheckCircle2, Lightbulb, Clock, Type } from 'lucide-react'
 import './ReportPanel.css'
 
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+
 const REPORT_TYPES = [
   { id: 'executive', label: 'Executive',  desc: 'High-level for stakeholders'  },
   { id: 'technical', label: 'Technical',  desc: 'In-depth with data points'    },
@@ -52,23 +54,28 @@ export default function ReportPanel({ workspace }) {
   const docIds = workspace.docs.map(d => d.docId).join(',')
 
   const handleGenerate = async () => {
-    setLoading(true)
-    setError(null)
-    setResult(null)
-    try {
-      const fd = new FormData()
-      fd.append('doc_ids', docIds)
-      fd.append('report_type', reportType)
-      if (instructions.trim()) fd.append('custom_instructions', instructions.trim())
-      const res = await fetch('http://localhost:8000/report', { method: 'POST', body: fd })
-      if (!res.ok) throw new Error('Report generation failed')
-      setResult(await res.json())
-    } catch (e) {
-      setError(e.message)
-    } finally {
-      setLoading(false)
-    }
+  setLoading(true)
+  setError(null)
+  setResult(null)
+  try {
+    const fd = new FormData()
+    fd.append('doc_ids', docIds)
+    fd.append('report_type', reportType)
+    if (instructions.trim()) fd.append('custom_instructions', instructions.trim())
+    const token = localStorage.getItem('token')
+    const res = await fetch(`${API}/report`, {
+      method: 'POST',
+      body: fd,
+      headers: { Authorization: `Bearer ${token}` },
+    })
+    if (!res.ok) throw new Error('Report generation failed')
+    setResult(await res.json())
+  } catch (e) {
+    setError(e.message)
+  } finally {
+    setLoading(false)
   }
+}
 
   const handleDownload = () => {
     if (!result) return

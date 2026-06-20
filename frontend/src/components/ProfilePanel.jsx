@@ -5,7 +5,8 @@ import {
   Loader2, Eye, EyeOff, Trash2, Activity, Shield, Gauge
 } from 'lucide-react'
 import './ProfilePanel.css'
-const API = 'http://localhost:8000'
+const API = import.meta.env.VITE_API_URL || 'http://localhost:8000'
+// const API = 'http://localhost:8000'
 
 export default function ProfilePanel({ authToken, onLogout, onClose }) {
   const [keyStatus, setKeyStatus]     = useState(null)
