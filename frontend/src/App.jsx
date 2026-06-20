@@ -5,18 +5,33 @@ import ChatPanel from './components/ChatPanel'
 import SourcesPanel from './components/SourcesPanel'
 import LandingPage from './components/LandingPage'
 import Background from './components/Background'
+import AuthModal from './components/AuthModal'
+import ProfilePanel from './components/ProfilePanel'
 import './App.css'
 
 function App() {
-  const [workspaces, setWorkspaces] = useState([])         // [{id, name, docs:[]}]
+  const [workspaces, setWorkspaces] = useState([])
   const [activeWorkspaceId, setActiveWorkspaceId] = useState(null)
   const [appStarted, setAppStarted] = useState(false)
-  const [activeSources, setActiveSources] = useState([])   // chunks from last answer
+  const [activeSources, setActiveSources] = useState([])
   const [highlightText, setHighlightText] = useState('')
+  const [authToken, setAuthToken] = useState(() => localStorage.getItem('token'))
+  const [showProfile, setShowProfile] = useState(false)
 
   const activeWorkspace = workspaces.find(w => w.id === activeWorkspaceId) || null
 
-  // ── Workspace actions ───────────────────────────────────────────────────
+  const handleAuth = (token) => {
+    setAuthToken(token)
+  }
+
+  const handleLogout = () => {
+    setAuthToken(null)
+    setWorkspaces([])
+    setActiveWorkspaceId(null)
+    setAppStarted(false)
+    setShowProfile(false)
+  }
+
   const createWorkspace = (name) => {
     const id = crypto.randomUUID()
     setWorkspaces(prev => [...prev, { id, name, docs: [] }])
@@ -28,7 +43,10 @@ function App() {
     const ws = workspaces.find(w => w.id === wsId)
     if (ws) {
       for (const doc of ws.docs) {
-        await fetch(`http://localhost:8000/documents/${doc.docId}`, { method: 'DELETE' }).catch(() => {})
+        await fetch(`http://localhost:8000/documents/${doc.docId}`, {
+          method: 'DELETE',
+          headers: { Authorization: `Bearer ${authToken}` }
+        }).catch(() => {})
       }
     }
     setWorkspaces(prev => prev.filter(w => w.id !== wsId))
@@ -43,7 +61,6 @@ function App() {
     setWorkspaces(prev => prev.map(w => w.id === wsId ? { ...w, name } : w))
   }
 
-  // ── Doc actions ─────────────────────────────────────────────────────────
   const addDoc = (wsId, doc) => {
     setWorkspaces(prev => prev.map(w =>
       w.id === wsId ? { ...w, docs: [...w.docs, doc] } : w
@@ -51,7 +68,10 @@ function App() {
   }
 
   const removeDoc = async (wsId, docId) => {
-    await fetch(`http://localhost:8000/documents/${docId}`, { method: 'DELETE' }).catch(() => {})
+    await fetch(`http://localhost:8000/documents/${docId}`, {
+      method: 'DELETE',
+      headers: { Authorization: `Bearer ${authToken}` }
+    }).catch(() => {})
     setWorkspaces(prev => prev.map(w =>
       w.id === wsId ? { ...w, docs: w.docs.filter(d => d.docId !== docId) } : w
     ))
@@ -59,7 +79,10 @@ function App() {
 
   const renameDoc = async (wsId, docId, newName) => {
     const fd = new FormData(); fd.append('fileName', newName)
-    await fetch(`http://localhost:8000/documents/${docId}/rename`, { method: 'PATCH', body: fd }).catch(() => {})
+    await fetch(`http://localhost:8000/documents/${docId}/rename`, {
+      method: 'PATCH', body: fd,
+      headers: { Authorization: `Bearer ${authToken}` }
+    }).catch(() => {})
     setWorkspaces(prev => prev.map(w =>
       w.id === wsId
         ? { ...w, docs: w.docs.map(d => d.docId === docId ? { ...d, fileName: newName } : d) }
@@ -67,10 +90,18 @@ function App() {
     ))
   }
 
-  // ── Sources callback ────────────────────────────────────────────────────
   const handleAnswer = (citations) => {
     setActiveSources(citations || [])
     setHighlightText('')
+  }
+
+  if (!authToken) {
+    return (
+      <>
+        <Background />
+        <AuthModal onAuth={handleAuth} />
+      </>
+    )
   }
 
   if (!appStarted) {
@@ -78,6 +109,15 @@ function App() {
       <>
         <Background />
         <LandingPage onCreateWorkspace={createWorkspace} />
+        <AnimatePresence>
+          {showProfile && (
+            <ProfilePanel
+              authToken={authToken}
+              onLogout={handleLogout}
+              onClose={() => setShowProfile(false)}
+            />
+          )}
+        </AnimatePresence>
       </>
     )
   }
@@ -95,6 +135,7 @@ function App() {
         onAddDoc={addDoc}
         onRemoveDoc={removeDoc}
         onRenameDoc={renameDoc}
+        onOpenProfile={() => setShowProfile(true)}
       />
       <main className="app-main">
         <AnimatePresence mode="wait">
@@ -105,11 +146,13 @@ function App() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
+              transition={{ duration: 0.15 }}
             >
               <ChatPanel
                 workspace={activeWorkspace}
                 onAnswer={handleAnswer}
                 onHighlight={setHighlightText}
+                authToken={authToken}
               />
               <SourcesPanel
                 sources={activeSources}
@@ -129,6 +172,16 @@ function App() {
           )}
         </AnimatePresence>
       </main>
+
+      <AnimatePresence>
+        {showProfile && (
+          <ProfilePanel
+            authToken={authToken}
+            onLogout={handleLogout}
+            onClose={() => setShowProfile(false)}
+          />
+        )}
+      </AnimatePresence>
     </div>
   )
 }
