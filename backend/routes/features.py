@@ -1,12 +1,13 @@
-# backend/routes/features.py
-
-from fastapi import APIRouter, Form, HTTPException
+from fastapi import APIRouter, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
 from services.retrieval import search_multiple
 from services.reranking import rerank
 from openai import OpenAI
 from core.config import config
 from core.logger import get_logger
+from sqlalchemy.ext.asyncio import AsyncSession
+from db import get_db
+from core.security import get_current_user, get_user_openai_key
 import json
 import os
 
@@ -15,8 +16,6 @@ log = get_logger("features")
 
 CHUNK_DIR = "storage/chunks"
 
-def _get_client():
-    return OpenAI(api_key=config.OPENAI_API_KEY)
 
 def _load_all_chunks(doc_id: str):
     path = f"{CHUNK_DIR}/{doc_id}.json"
@@ -26,16 +25,16 @@ def _load_all_chunks(doc_id: str):
         return json.load(f)
 
 
-# ─────────────────────────────────────────────
-# 1. EXPLAIN DOCUMENT — section-wise breakdown
-# ─────────────────────────────────────────────
 @router.post("/explain")
-async def explain_document(doc_ids: str = Form(...)):
+async def explain_document(
+    doc_ids: str = Form(...),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
+):
     id_list = [d.strip() for d in doc_ids.split(",") if d.strip()]
     if not id_list:
         raise HTTPException(status_code=400, detail="No document IDs provided")
 
-    # Collect chunks from all docs (first 60 chunks max to stay in token budget)
     all_chunks = []
     for doc_id in id_list:
         chunks = _load_all_chunks(doc_id)
@@ -44,14 +43,14 @@ async def explain_document(doc_ids: str = Form(...)):
     if not all_chunks:
         raise HTTPException(status_code=404, detail="No content found for the given documents")
 
-    # Build a text sample (first ~4000 chars per doc)
     combined_text = ""
     for chunk in all_chunks[:40]:
         combined_text += chunk.get("text", "") + "\n\n"
         if len(combined_text) > 6000:
             break
 
-    client = _get_client()
+    openai_key = await get_user_openai_key(current_user.id, db)
+    client = OpenAI(api_key=openai_key)
 
     prompt = f"""You are an expert document tutor. Analyze the document content below and produce a structured section-by-section explanation.
 
@@ -95,14 +94,13 @@ Document content:
         raise HTTPException(status_code=500, detail="Failed to explain document")
 
 
-# ─────────────────────────────────────────────
-# 2. DOCUMENT COMPARISON
-# ─────────────────────────────────────────────
 @router.post("/compare")
 async def compare_documents(
     doc_id_a: str = Form(...),
     doc_id_b: str = Form(...),
-    focus: str = Form(default="")
+    focus: str = Form(default=""),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     chunks_a = _load_all_chunks(doc_id_a)
     chunks_b = _load_all_chunks(doc_id_b)
@@ -145,7 +143,9 @@ Return ONLY valid JSON in this exact format:
   "similarity_score": <0-100 integer representing overall similarity>
 }}"""
 
-    client = _get_client()
+    openai_key = await get_user_openai_key(current_user.id, db)
+    client = OpenAI(api_key=openai_key)
+
     try:
         response = client.chat.completions.create(
             model=config.CHAT_MODEL,
@@ -162,14 +162,13 @@ Return ONLY valid JSON in this exact format:
         raise HTTPException(status_code=500, detail="Failed to compare documents")
 
 
-# ─────────────────────────────────────────────
-# 3. AUTO REPORT GENERATOR
-# ─────────────────────────────────────────────
 @router.post("/report")
 async def generate_report(
     doc_ids: str = Form(...),
-    report_type: str = Form(default="executive"),  # executive | technical | summary
-    custom_instructions: str = Form(default="")
+    report_type: str = Form(default="executive"),
+    custom_instructions: str = Form(default=""),
+    current_user=Depends(get_current_user),
+    db: AsyncSession = Depends(get_db),
 ):
     id_list = [d.strip() for d in doc_ids.split(",") if d.strip()]
     if not id_list:
@@ -222,7 +221,9 @@ Return ONLY valid JSON:
 Document content:
 {combined_text}"""
 
-    client = _get_client()
+    openai_key = await get_user_openai_key(current_user.id, db)
+    client = OpenAI(api_key=openai_key)
+
     try:
         response = client.chat.completions.create(
             model=config.CHAT_MODEL,
