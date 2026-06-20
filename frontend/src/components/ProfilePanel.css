@@ -236,3 +236,91 @@
 }
 
 .pp-spin { animation: spin 1s linear infinite; }
+
+/* Token stats row */
+.pp-stats-row {
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  gap: 8px;
+}
+
+.pp-stat-box {
+  background: rgba(255,255,255,0.02);
+  border: 1px solid var(--border-color);
+  border-radius: var(--radius-sm);
+  padding: 12px 10px;
+  text-align: center;
+}
+
+.pp-stat-val {
+  font-size: 18px;
+  font-weight: 800;
+  color: var(--accent-primary);
+  font-variant-numeric: tabular-nums;
+  line-height: 1;
+  margin-bottom: 4px;
+}
+
+.pp-stat-lbl {
+  font-size: 10px;
+  color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+/* Token meter */
+.pp-meter-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.pp-meter-bar {
+  height: 6px;
+  background: rgba(255,255,255,0.06);
+  border-radius: 99px;
+  overflow: hidden;
+}
+
+.pp-meter-fill {
+  height: 100%;
+  border-radius: 99px;
+  transition: background 0.3s;
+}
+
+.pp-meter-labels {
+  display: flex;
+  justify-content: space-between;
+  font-size: 11px;
+  font-weight: 600;
+}
+
+.pp-meter-remaining { color: var(--text-muted); }
+
+.pp-meter-warning {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #f87171;
+  padding: 6px 8px;
+  background: rgba(248,113,113,0.07);
+  border: 1px solid rgba(248,113,113,0.15);
+  border-radius: var(--radius-sm);
+}
+
+/* Limit setter */
+.pp-limit-block {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.pp-limit-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
+}
