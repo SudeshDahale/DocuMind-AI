@@ -163,3 +163,24 @@
   line-height: 1.8;
   padding: 24px 16px;
 }
+
+.sidebar-profile-btn {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  padding: 14px 16px;
+  border-top: 1px solid var(--border-color);
+  background: none;
+  border-left: none; border-right: none; border-bottom: none;
+  color: var(--text-muted);
+  font-size: 13px;
+  font-family: inherit;
+  cursor: pointer;
+  transition: color 0.15s, background 0.15s;
+  flex-shrink: 0;
+}
+.sidebar-profile-btn:hover {
+  color: var(--text-primary);
+  background: rgba(255,255,255,0.04);
+}

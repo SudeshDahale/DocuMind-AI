@@ -2,7 +2,7 @@ import { useState } from 'react'
 import { motion, AnimatePresence } from 'framer-motion'
 import {
   FolderOpen, Plus, Trash2, Pencil, Check, X,
-  FileText, Upload, ChevronDown, ChevronRight, Loader2
+  FileText, Upload, ChevronDown, ChevronRight, Loader2, UserCircle
 } from 'lucide-react'
 import './Sidebar.css'
 
@@ -11,13 +11,14 @@ export default function Sidebar({
   onSelectWorkspace, onCreateWorkspace,
   onDeleteWorkspace, onRenameWorkspace,
   onAddDoc, onRemoveDoc, onRenameDoc,
+  onOpenProfile,
 }) {
   const [newWsName, setNewWsName] = useState('')
   const [creatingWs, setCreatingWs] = useState(false)
   const [editingWsId, setEditingWsId] = useState(null)
   const [editWsVal, setEditWsVal] = useState('')
   const [expandedWs, setExpandedWs] = useState({})
-  const [uploading, setUploading] = useState(null) // wsId
+  const [uploading, setUploading] = useState(null)
 
   const toggleExpand = (id) => setExpandedWs(p => ({ ...p, [id]: !p[id] }))
 
@@ -32,13 +33,17 @@ export default function Sidebar({
   const uploadFile = async (wsId, file) => {
     setUploading(wsId)
     const fd = new FormData(); fd.append('file', file)
+    const token = localStorage.getItem('token')
     try {
-      const res = await fetch('http://localhost:8000/upload', { method: 'POST', body: fd })
+      const res = await fetch('http://localhost:8000/upload', {
+        method: 'POST', body: fd,
+        headers: { Authorization: `Bearer ${token}` }
+      })
       if (!res.ok) throw new Error()
       const data = await res.json()
       onAddDoc(wsId, { docId: data.doc_id, fileName: file.name })
       setExpandedWs(p => ({ ...p, [wsId]: true }))
-    } catch { /* swallow — user sees nothing added */ }
+    } catch { }
     finally { setUploading(null) }
   }
 
@@ -46,11 +51,7 @@ export default function Sidebar({
     <aside className="sidebar">
       <div className="sidebar-header">
         <span className="sidebar-logo">DocuMind</span>
-        <button
-          className="sidebar-new-btn"
-          onClick={() => setCreatingWs(true)}
-          title="New workspace"
-        >
+        <button className="sidebar-new-btn" onClick={() => setCreatingWs(true)} title="New workspace">
           <Plus size={16} />
         </button>
       </div>
@@ -89,7 +90,6 @@ export default function Sidebar({
               animate={{ opacity: 1, x: 0 }}
               exit={{ opacity: 0, x: -10 }}
             >
-              {/* Workspace row */}
               <div className="ws-row" onClick={() => { onSelectWorkspace(ws.id); toggleExpand(ws.id) }}>
                 <span className="ws-chevron">
                   {expandedWs[ws.id] ? <ChevronDown size={13} /> : <ChevronRight size={13} />}
@@ -121,7 +121,6 @@ export default function Sidebar({
                 </div>
               </div>
 
-              {/* Doc list */}
               <AnimatePresence>
                 {expandedWs[ws.id] && (
                   <motion.div
@@ -134,16 +133,11 @@ export default function Sidebar({
                       <div key={doc.docId} className="doc-row">
                         <FileText size={12} className="doc-icon" />
                         <span className="doc-name">{doc.fileName}</span>
-                        <button
-                          className="icon-btn red small"
-                          onClick={() => onRemoveDoc(ws.id, doc.docId)}
-                        >
+                        <button className="icon-btn red small" onClick={() => onRemoveDoc(ws.id, doc.docId)}>
                           <X size={11} />
                         </button>
                       </div>
                     ))}
-
-                    {/* Upload to workspace */}
                     <label className="doc-upload-btn">
                       {uploading === ws.id
                         ? <><Loader2 size={12} className="spinning" /> Uploading…</>
@@ -168,6 +162,12 @@ export default function Sidebar({
           <p className="sidebar-empty">No workspaces yet.<br />Click + to create one.</p>
         )}
       </nav>
+
+      {/* Profile button at bottom */}
+      <button className="sidebar-profile-btn" onClick={onOpenProfile}>
+        <UserCircle size={16} />
+        <span>Profile & Settings</span>
+      </button>
     </aside>
   )
 }
