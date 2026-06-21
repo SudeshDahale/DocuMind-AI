@@ -6,26 +6,36 @@ import os
 _raw_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./documind.db")
 
 if _raw_url.startswith("postgresql://") or _raw_url.startswith("postgres://"):
-    # Strip any existing ssl params first
-    _raw_url = _raw_url.replace("?sslmode=require", "").replace("&sslmode=require", "")
+    # Remove any existing ssl params from URL
+    _raw_url = (_raw_url
+        .replace("?sslmode=require", "")
+        .replace("&sslmode=require", "")
+        .replace("?ssl=true", "")
+        .replace("&ssl=true", ""))
     # Convert to asyncpg driver
-    DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1).replace("postgres://", "postgresql+asyncpg://", 1)
-    # asyncpg uses ssl=True not sslmode=require
-    DATABASE_URL += "?ssl=true"
+    DATABASE_URL = (_raw_url
+        .replace("postgresql://", "postgresql+asyncpg://", 1)
+        .replace("postgres://", "postgresql+asyncpg://", 1))
+    # Pass ssl via connect_args, NOT in the URL
+    engine = create_async_engine(
+        DATABASE_URL,
+        echo=False,
+        connect_args={"ssl": "require"},
+    )
 else:
     DATABASE_URL = _raw_url
+    engine = create_async_engine(DATABASE_URL, echo=False)
 
-engine = create_async_engine(DATABASE_URL, echo=False)
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
 Base = declarative_base()
 
 
 class User(Base):
     __tablename__ = "users"
-    id            = Column(String, primary_key=True)
-    email         = Column(String, unique=True, nullable=False)
+    id              = Column(String, primary_key=True)
+    email           = Column(String, unique=True, nullable=False)
     hashed_password = Column(String, nullable=False)
-    created_at    = Column(Float, nullable=False)
+    created_at      = Column(Float, nullable=False)
 
 
 class APIKey(Base):
@@ -36,7 +46,7 @@ class APIKey(Base):
     created_at    = Column(Float, nullable=False)
     total_calls   = Column(Integer, default=0)
     tokens_used   = Column(Integer, default=0)
-    token_limit   = Column(Integer, default=0)   # 0 = unlimited
+    token_limit   = Column(Integer, default=0)
 
 
 class Workspace(Base):
@@ -49,18 +59,20 @@ class Workspace(Base):
 
 class Document(Base):
     __tablename__ = "documents"
-    doc_id      = Column(String, primary_key=True)
-    user_id     = Column(String, ForeignKey("users.id"), nullable=False)
+    doc_id       = Column(String, primary_key=True)
+    user_id      = Column(String, ForeignKey("users.id"), nullable=False)
     workspace_id = Column(String, ForeignKey("workspaces.id"), nullable=True)
-    file_name   = Column(String, nullable=False)
-    uploaded_at = Column(Float, nullable=False)
+    file_name    = Column(String, nullable=False)
+    uploaded_at  = Column(Float, nullable=False)
+
 
 class DocStore(Base):
     __tablename__ = "doc_store"
-    doc_id       = Column(String, primary_key=True)
-    chunks_json  = Column(Text, nullable=False)
-    index_bytes  = Column(Text, nullable=False)
-    created_at   = Column(Float, nullable=False)
+    doc_id      = Column(String, primary_key=True)
+    chunks_json = Column(Text, nullable=False)
+    index_bytes = Column(Text, nullable=False)
+    created_at  = Column(Float, nullable=False)
+
 
 class QueryHistory(Base):
     __tablename__ = "query_history"
