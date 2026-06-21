@@ -1,26 +1,34 @@
 from fastapi import APIRouter, Form, HTTPException, Depends
 from fastapi.responses import JSONResponse
-from services.retrieval import search_multiple
-from services.reranking import rerank
 from openai import OpenAI
 from core.config import config
 from core.logger import get_logger
 from sqlalchemy.ext.asyncio import AsyncSession
-from db import get_db
+from sqlalchemy import select
+from db import get_db, DocStore
 from core.security import get_current_user, get_user_openai_key
 import json
 import os
+import base64
 
 router = APIRouter()
 log = get_logger("features")
 
 CHUNK_DIR = "storage/chunks"
+INDEX_DIR = "storage/indexes"
 
 
-def _load_all_chunks(doc_id: str):
-    path = f"{CHUNK_DIR}/{doc_id}.json"
+async def _load_chunks_with_restore(doc_id: str, db: AsyncSession) -> list:
+    """Load chunks from disk, restoring from DB if missing after redeploy."""
+    path = os.path.join(CHUNK_DIR, f"{doc_id}.json")
     if not os.path.exists(path):
-        return []
+        result = await db.execute(select(DocStore).where(DocStore.doc_id == doc_id))
+        store = result.scalar_one_or_none()
+        if not store:
+            return []
+        os.makedirs(CHUNK_DIR, exist_ok=True)
+        with open(path, "w") as f:
+            f.write(store.chunks_json)
     with open(path, "r") as f:
         return json.load(f)
 
@@ -37,7 +45,7 @@ async def explain_document(
 
     all_chunks = []
     for doc_id in id_list:
-        chunks = _load_all_chunks(doc_id)
+        chunks = await _load_chunks_with_restore(doc_id, db)
         all_chunks.extend(chunks[:60 // len(id_list)])
 
     if not all_chunks:
@@ -102,8 +110,8 @@ async def compare_documents(
     current_user=Depends(get_current_user),
     db: AsyncSession = Depends(get_db),
 ):
-    chunks_a = _load_all_chunks(doc_id_a)
-    chunks_b = _load_all_chunks(doc_id_b)
+    chunks_a = await _load_chunks_with_restore(doc_id_a, db)
+    chunks_b = await _load_chunks_with_restore(doc_id_b, db)
 
     if not chunks_a or not chunks_b:
         raise HTTPException(status_code=404, detail="One or both documents not found")
@@ -113,7 +121,6 @@ async def compare_documents(
 
     text_a = "\n\n".join(c.get("text", "") for c in chunks_a[:25])[:3500]
     text_b = "\n\n".join(c.get("text", "") for c in chunks_b[:25])[:3500]
-
     focus_line = f"\nFocus the comparison specifically on: {focus}" if focus.strip() else ""
 
     prompt = f"""You are an expert analyst. Compare these two documents thoroughly.{focus_line}
@@ -176,7 +183,8 @@ async def generate_report(
 
     all_chunks = []
     for doc_id in id_list:
-        all_chunks.extend(_load_all_chunks(doc_id)[:30])
+        chunks = await _load_chunks_with_restore(doc_id, db)
+        all_chunks.extend(chunks[:30])
 
     if not all_chunks:
         raise HTTPException(status_code=404, detail="No content found")

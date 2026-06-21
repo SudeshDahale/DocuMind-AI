@@ -202,13 +202,15 @@ async def ask_question(
 
     t0 = time.perf_counter()
     try:
-        relevant_chunks = search_multiple(id_list, question)
+        from openai import OpenAI
+        user_client = OpenAI(api_key=openai_key)
+        relevant_chunks = search_multiple(id_list, question, client=user_client)
         reranked_chunks = rerank(question, relevant_chunks)
         result = answer_question(question, reranked_chunks, history=history_list, openai_api_key=openai_key)
     except Exception as e:
         log.error("ask_failed", extra={"error": str(e)})
         raise HTTPException(status_code=500, detail="Failed to answer question.")
-
+    
     tokens_this_call = result.get("usage", {}).get("total_tokens", 0)
     key_row.total_calls += 1
     key_row.tokens_used += tokens_this_call
