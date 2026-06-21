@@ -59,9 +59,6 @@ async def upload_pdf(
 
     try:
         from openai import OpenAI
-        from services.embedding import get_embeddings_batch
-        from services.retrieval import build_vector_store as _build_vs
-
         user_client = OpenAI(api_key=openai_key)
 
         pages = extract_text(file.file, file.filename)
@@ -71,9 +68,8 @@ async def upload_pdf(
         if not chunks:
             raise ValueError("Document produced no chunks after splitting.")
 
-        texts = [c["text"] for c in chunks]
-        embeddings = get_embeddings_batch(texts, client=user_client)
-        _build_vs(chunks, doc_id, embeddings)
+        # Pass user_client so embeddings use the user's own API key
+        create_vector_store(chunks, doc_id, client=user_client)
 
     except ValueError as e:
         raise HTTPException(status_code=422, detail=str(e))

@@ -9,35 +9,33 @@ from services.retrieval import (
 )
 from services.generation import answer_question
 import os
-import numpy as np
-from core.config import config
 import base64
 import faiss
+from core.config import config
 
 os.makedirs(config.index_dir, exist_ok=True)
 os.makedirs(config.chunk_dir, exist_ok=True)
 
 
-def create_vector_store(chunks, doc_id):
+def create_vector_store(chunks, doc_id, client=None):
     texts = [c["text"] for c in chunks]
-    embeddings = get_embeddings_batch(texts)
+    embeddings = get_embeddings_batch(texts, client=client)
     return build_vector_store(chunks, doc_id, embeddings), chunks
 
 
-
 def index_to_bytes(doc_id: str) -> bytes:
-    """Read saved FAISS index from disk and return raw bytes."""
     path = os.path.join(config.index_dir, f"{doc_id}.index")
     with open(path, "rb") as f:
         return f.read()
 
+
 def bytes_to_index(data: bytes, doc_id: str):
-    """Write bytes back to disk as FAISS index."""
     path = os.path.join(config.index_dir, f"{doc_id}.index")
     os.makedirs(config.index_dir, exist_ok=True)
     with open(path, "wb") as f:
         f.write(data)
     return faiss.read_index(path)
+
 
 __all__ = [
     "chunk_text", "create_vector_store", "index_to_bytes", "bytes_to_index",
