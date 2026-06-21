@@ -5,11 +5,13 @@ import os
 
 _raw_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./documind.db")
 
-# Convert standard postgres URL to async driver
-if _raw_url.startswith("postgresql://"):
-    DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1)
-elif _raw_url.startswith("postgres://"):
-    DATABASE_URL = _raw_url.replace("postgres://", "postgresql+asyncpg://", 1)
+if _raw_url.startswith("postgresql://") or _raw_url.startswith("postgres://"):
+    # Strip any existing ssl params first
+    _raw_url = _raw_url.replace("?sslmode=require", "").replace("&sslmode=require", "")
+    # Convert to asyncpg driver
+    DATABASE_URL = _raw_url.replace("postgresql://", "postgresql+asyncpg://", 1).replace("postgres://", "postgresql+asyncpg://", 1)
+    # asyncpg uses ssl=True not sslmode=require
+    DATABASE_URL += "?ssl=true"
 else:
     DATABASE_URL = _raw_url
 
