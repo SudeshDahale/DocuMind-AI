@@ -51,6 +51,10 @@ async def upload_pdf(
     if ext not in ALLOWED_EXTENSIONS:
         raise HTTPException(status_code=400, detail=f"Unsupported file type '.{ext}'.")
 
+    # Get user's OpenAI key for embeddings
+    openai_key = await get_user_openai_key(current_user.id, db)
+    os.environ["OPENAI_API_KEY"] = openai_key
+
     t0 = time.perf_counter()
     doc_id = str(uuid.uuid4())
     file_name = file.filename
@@ -68,31 +72,6 @@ async def upload_pdf(
     except Exception as e:
         log.error("upload_failed", extra={"doc_id": doc_id, "error": str(e)})
         raise HTTPException(status_code=500, detail="Failed to process document.")
-
-    chunk_path = os.path.join(CHUNK_DIR, f"{doc_id}.json")
-    with open(chunk_path, "w") as f:
-        json.dump(chunks, f)
-
-    encoded_index = base64.b64encode(index_to_bytes(doc_id)).decode("utf-8")
-
-    db.add(DocStore(
-        doc_id=doc_id,
-        chunks_json=json.dumps(chunks),
-        index_bytes=encoded_index,
-        created_at=time.time(),
-    ))
-    db.add(Document(
-        doc_id=doc_id,
-        user_id=current_user.id,
-        workspace_id=None,
-        file_name=file_name,
-        uploaded_at=time.time(),
-    ))
-    await db.commit()
-
-    latency_ms = round((time.perf_counter() - t0) * 1000, 1)
-    log.info("document_uploaded", extra={"doc_id": doc_id, "file_name": file_name, "latency_ms": latency_ms})
-    return {"message": "Uploaded successfully", "doc_id": doc_id}
 
 
 @router.get("/documents")
