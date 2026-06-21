@@ -6,24 +6,27 @@ import os
 _raw_url = os.getenv("DATABASE_URL", "sqlite+aiosqlite:///./documind.db")
 
 if _raw_url.startswith("postgresql://") or _raw_url.startswith("postgres://"):
-    # Remove any existing ssl params from URL
     _raw_url = (_raw_url
         .replace("?sslmode=require", "")
         .replace("&sslmode=require", "")
         .replace("?ssl=true", "")
         .replace("&ssl=true", ""))
-    # Convert to asyncpg driver
     DATABASE_URL = (_raw_url
         .replace("postgresql://", "postgresql+asyncpg://", 1)
         .replace("postgres://", "postgresql+asyncpg://", 1))
-    # Pass ssl via connect_args, NOT in the URL
+else:
+    DATABASE_URL = _raw_url
+
+if DATABASE_URL.startswith("postgresql+asyncpg://"):
     engine = create_async_engine(
         DATABASE_URL,
         echo=False,
-        connect_args={"ssl": "require"},
+        connect_args={
+            "ssl": "require",
+            "statement_cache_size": 0,
+        },
     )
 else:
-    DATABASE_URL = _raw_url
     engine = create_async_engine(DATABASE_URL, echo=False)
 
 AsyncSessionLocal = sessionmaker(engine, class_=AsyncSession, expire_on_commit=False)
